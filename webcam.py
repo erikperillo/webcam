@@ -4,57 +4,66 @@
 #v1.0 
 #by Erik Perillo
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 import cv2
 import sys
-sys.path.insert(1,"/home/erik/prog/py/clarg/")
-import clarg
+import oarg2 as oarg
 
-#command line arguments container
-container = clarg.Container()
 #command line parameters descriptors
-delay_desc     = clarg.Clarg("-td",20,"Time delay in milliseconds between frame captures")
-cam_ind_desc   = clarg.Clarg("-ci",0,"Index of webcam to be used") 
-win_size_desc  = clarg.Clarg("-ws",(0,0),"Window size of image in a tuple (width,height)",2)
-helpmsg_desc   = clarg.Clarg("-h",False,"This help message",0)
+frame_rate     = oarg.Oarg(int,"-f --frame-rate",24,"Frame rate to be used")
+cam_ind        = oarg.Oarg(int,"-i --cam-index",0,"Index of webcam to be used") 
+win_size_descr = oarg.Oarg(int,"-s --win-size",0,"Window size of image (in format width height)")
+output         = oarg.Oarg(str,"-o --file-output","","File to save output")
+helpmsg        = oarg.Oarg(bool,"-h --help",False,"This help message")
 
-#delay from one capture to another
-delay     = int(container.parse(delay_desc))
-cam_ind   = int(container.parse(cam_ind_desc))
-win_size  = tuple( int(i) for i in container.parse(win_size_desc))
-helpmsg   = bool(container.parse(helpmsg_desc))
+#parsing args
+if oarg.parse() != 0:
+     print "error: invalid options passed:",oarg.Oarg.invalid_options
+     exit()
+
+#setting window size
+if len(win_size_descr.vals) < 2:
+     win_size = 2*(win_size_descr.val,)
+else:
+     win_size = (win_size_descr.getVal(0),win_size_descr.getVal(1))
 
 #checking if frame must be resized:
-if win_size == (0,0):
-	resize = False
-else:
-	resize = True
+resize = (win_size != (0,0))
 
 #help message
-if helpmsg:
-	print "webcam: a simple as fuck webcam viewer - version",VERSION
-	print "by Erik Perillo"
-	print "Avaliable command line options are:"
-	container.describe()
-	exit()
+if helpmsg.val:
+     print "webcam: a simple as fuck webcam viewer - version",VERSION
+     print "by Erik Perillo"
+     print "Avaliable command line options are:"
+     oarg.describeArgs()
+     exit()
 
 #opening video capture device
 cap = cv2.VideoCapture()
-cap.open(cam_ind)
+cap.open(cam_ind.val)
 
 #creating named window
 cv2.namedWindow("video",cv2.WINDOW_AUTOSIZE)
 
+# Define the codec and create VideoWriter object
+if output.found:
+     fourcc = cv2.cv.CV_FOURCC(*'MJPG')
+     out = cv2.VideoWriter(output.val,fourcc, 20.0, (640,480))
+
 #main loop
 while True:
-	ret, frame = cap.read()
-	if frame is not None and cv2.waitKey(delay) & 0xFF != 27:
-		if resize:
-			frame = cv2.resize(frame,win_size)
-		cv2.imshow("video",frame)
-	else:
-		break
+     ret, frame = cap.read()
+     if frame != None and cv2.waitKey(1000/frame_rate.val) & 0xFF != 27:
+          if resize:
+               frame = cv2.resize(frame,win_size)
+          cv2.imshow("video",frame)
+          if output.found:
+               out.write(frame)
+     else:
+          break
 
 #closing capture
 cap.release()
+if output.found:
+     out.release()
